@@ -13,12 +13,20 @@ const App = () => {
   const { width, height } = useWindowDimensions();
 
   const bg = useImage(require("@/assets/sprites/background-day.png"));
+  const bird = useImage(require("@/assets/sprites/yellowbird-upflap.png"));
 
   const r = width * 0.33;
   return (
     <SafeAreaView>
       <Canvas style={{ width, height, backgroundColor: "red" }}>
         <Image image={bg} height={height} width={width} fit={"cover"} />
+        <Image
+          image={bird}
+          width={64}
+          height={48}
+          y={height / 2}
+          x={width / 4}
+        />
       </Canvas>
     </SafeAreaView>
   );
