@@ -21,6 +21,7 @@ import {
   Extrapolation,
   useAnimatedReaction,
   cancelAnimation,
+  runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -50,9 +51,9 @@ const App = () => {
   const ground = useImage(require("@/assets/sprites/base.png"));
 
   // Dynamic Values
-  const gameStarted = useSharedValue(false);
+  const gameStart = useSharedValue(false);
   const messageHeight = useDerivedValue(() =>
-    gameStarted.value ? 0 : height / 2
+    gameStart.value ? 0 : height / 2
   );
   const gameOver = useSharedValue(false);
   const outroHeight = useDerivedValue(() => (!gameOver.value ? 0 : height / 2));
@@ -83,48 +84,53 @@ const App = () => {
 
   const pipe1X = useSharedValue(width);
 
+  // Animations
+  const animateGround = () => {
+    groundX.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 0 }),
+        withTiming(-width, { duration: 2000, easing: Easing.linear })
+      ),
+      -1
+    );
+  };
+
+  const pipeAnimation = withRepeat(
+    withSequence(
+      withTiming(width, { duration: 0 }),
+      withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear })
+    ),
+    -1
+  );
+
+  // On Mount
+  //  - animate ground
+  //  + animate bird bop
+  useEffect(() => {
+    animateGround();
+  }, []);
+
   // Handle Taps
   const touch = Gesture.Tap()
     .onTouchesDown(() => {
-      if (!gameStarted.value) {
+      if (!gameStart.value) {
         // Start Game
-        gameStarted.value = true;
+        gameStart.value = true;
         birdYVelocity.value = JUMP;
       } else if (gameOver.value) {
-        gameStarted.value = false;
+        gameStart.value = false;
         gameOver.value = false;
         birdY.value = height / 2.4;
         birdYVelocity.value = 6;
+        runOnJS(animateGround)();
       } else {
         birdYVelocity.value = JUMP;
       }
     })
     .onEnd(() => {});
 
-  // Animate Ground
-  useEffect(() => {
-    groundX.value = withRepeat(
-      withSequence(
-        withTiming(-width, { duration: 2000, easing: Easing.linear })
-      ),
-      -1
-    );
-  }, []);
-
-  // // Animate Pipes
-  // useEffect(() => {
-  //   if (gameStarted.value) {
-  //     pipe1X.value = withRepeat(
-  //       withSequence(
-  //         withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear }),
-  //         withTiming(width, { duration: 0 })
-  //       ),
-  //       -1
-  //     );
-  //   }
-  // }, [isStarted]);
-
-  // Increment Score
+  // Pipe 1 X Change
+  //  - Increment Score
   useAnimatedReaction(
     () => pipe1X.value,
     (currentValue, previousValue) => {
@@ -139,7 +145,9 @@ const App = () => {
     }
   );
 
-  // Bird collision detection
+  // Bird Y Change
+  //  - Hit Ground
+  //  + Hit Pipe
   useAnimatedReaction(
     () => birdY.value,
     (currentValue, previousValue) => {
@@ -147,12 +155,23 @@ const App = () => {
       if (currentValue > height - groundHeight) {
         gameOver.value = true;
       }
-
       // Hits the Pipe
     }
   );
 
-  // Stop animation on Game Over
+  // Game Start
+  //  - Animate Ground
+  useAnimatedReaction(
+    () => gameStart.value,
+    (currentValue, previousValue) => {
+      if (currentValue && !previousValue) {
+        runOnJS(animateGround)();
+      }
+    }
+  );
+
+  // Game Over
+  //  - Stop Animations
   useAnimatedReaction(
     () => gameOver.value,
     (currentValue, previousValue) => {
@@ -167,7 +186,7 @@ const App = () => {
   useFrameCallback(({ timeSincePreviousFrame: dt }) => {
     if (dt === null) return;
 
-    if (!gameStarted.value) return;
+    if (!gameStart.value) return;
     if (gameOver.value) return;
     birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
     birdY.value = birdY.value + birdYVelocity.value;
@@ -210,7 +229,6 @@ const App = () => {
               transform={[{ rotate: Math.PI }, { scaleX: -1 }]}
               origin={{ x: width / 2, y: 0 }}
             />
-
             <Image
               image={pipe}
               height={pipeHeight}
