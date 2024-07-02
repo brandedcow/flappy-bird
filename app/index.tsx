@@ -4,7 +4,6 @@ import {
   Group,
   useImage,
   Image,
-  scale,
   Text,
   useFont,
 } from "@shopify/react-native-skia";
@@ -17,31 +16,29 @@ import {
   withSequence,
   withRepeat,
   useFrameCallback,
-  runOnJS,
   useDerivedValue,
   interpolate,
   Extrapolation,
   useAnimatedReaction,
+  cancelAnimation,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { useGameState } from "@/store/useGameState";
 
 const GRAVITY = 18;
 const JUMP = -5;
 
 const App = () => {
-  const { isStarted, startGame, endGame } = useGameState();
-  const { width, height } = useWindowDimensions();
-
   // Constants
+  const { width, height } = useWindowDimensions();
   const pipeWidth = 104;
   const pipeHeight = 640;
   const pipeOffset = height / 1.6;
   const pipeOpening = 250;
   const birdWidth = 64;
   const birdHeight = 48;
+  const groundHeight = width / 3;
 
-  // Asests
+  // Assets
   const font = useFont(require("@/assets/fonts/SpaceMono-Regular.ttf"), 32);
   const bg = useImage(require("@/assets/sprites/background-day.png"));
   const intro = useImage(require("@/assets/sprites/message.png"));
@@ -52,6 +49,12 @@ const App = () => {
   const ground = useImage(require("@/assets/sprites/base.png"));
 
   // Dynamic Values
+  const gameStarted = useSharedValue(false);
+  const messageHeight = useDerivedValue(() =>
+    gameStarted.value ? 0 : height / 2
+  );
+  const gameOver = useSharedValue(false);
+
   const score = useSharedValue(0);
   const scoreText = useDerivedValue(() => score.value.toString());
 
@@ -78,26 +81,23 @@ const App = () => {
 
   const pipe1X = useSharedValue(width);
 
-  // Gesture
+  // Handle Taps
   const touch = Gesture.Tap()
-    .onStart(() => {
-      if (!isStarted) {
-        runOnJS(startGame)();
+    .onTouchesDown(() => {
+      if (!gameStarted.value) {
+        // Start Game
+        gameStarted.value = true;
+        birdYVelocity.value = JUMP;
+      } else if (gameOver.value) {
+        gameStarted.value = false;
+        gameOver.value = false;
+        birdY.value = height / 2.4;
+        birdYVelocity.value = 6;
+      } else {
+        birdYVelocity.value = JUMP;
       }
     })
-    .onTouchesDown(() => {
-      birdYVelocity.value = JUMP;
-    })
     .onEnd(() => {});
-
-  // Hooks
-  useFrameCallback(({ timeSincePreviousFrame: dt }) => {
-    if (dt === null) return;
-
-    if (!isStarted) return;
-    birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
-    birdY.value = birdY.value + birdYVelocity.value;
-  });
 
   // Animate Ground
   useEffect(() => {
@@ -109,19 +109,20 @@ const App = () => {
     );
   }, []);
 
-  // Animate Pipes
-  useEffect(() => {
-    if (isStarted) {
-      pipe1X.value = withRepeat(
-        withSequence(
-          withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear }),
-          withTiming(width, { duration: 0 })
-        ),
-        -1
-      );
-    }
-  }, [isStarted]);
+  // // Animate Pipes
+  // useEffect(() => {
+  //   if (gameStarted.value) {
+  //     pipe1X.value = withRepeat(
+  //       withSequence(
+  //         withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear }),
+  //         withTiming(width, { duration: 0 })
+  //       ),
+  //       -1
+  //     );
+  //   }
+  // }, [isStarted]);
 
+  // Increment Score
   useAnimatedReaction(
     () => pipe1X.value,
     (currentValue, previousValue) => {
@@ -136,6 +137,40 @@ const App = () => {
     }
   );
 
+  // Bird collision detection
+  useAnimatedReaction(
+    () => birdY.value,
+    (currentValue, previousValue) => {
+      // Hits the ground
+      if (currentValue > height - groundHeight) {
+        gameOver.value = true;
+      }
+
+      // Hits the Pipe
+    }
+  );
+
+  // Stop animation on Game Over
+  useAnimatedReaction(
+    () => gameOver.value,
+    (currentValue, previousValue) => {
+      if (currentValue && !previousValue) {
+        cancelAnimation(groundX);
+        cancelAnimation(pipe1X);
+      }
+    }
+  );
+
+  // Bird Physics
+  useFrameCallback(({ timeSincePreviousFrame: dt }) => {
+    if (dt === null) return;
+
+    if (!gameStarted.value) return;
+    if (gameOver.value) return;
+    birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
+    birdY.value = birdY.value + birdYVelocity.value;
+  });
+
   return (
     <SafeAreaView>
       <GestureDetector gesture={touch}>
@@ -147,14 +182,12 @@ const App = () => {
           <Text text={scoreText} font={font} x={width / 2} y={40} />
 
           {/* Intro */}
-          {!isStarted && (
-            <Image
-              image={intro}
-              height={height * 0.5}
-              width={width}
-              y={height * 0.12}
-            />
-          )}
+          <Image
+            image={intro}
+            height={messageHeight}
+            width={width}
+            y={height * 0.12}
+          />
 
           {/* Pipes */}
           <Group>
@@ -180,7 +213,7 @@ const App = () => {
           {/* Ground */}
           <Image
             image={ground}
-            height={width / 3}
+            height={groundHeight}
             width={width}
             x={groundX}
             y={height - width / 3}
