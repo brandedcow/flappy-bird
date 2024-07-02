@@ -16,32 +16,64 @@ import {
   withRepeat,
   useFrameCallback,
   runOnJS,
+  useDerivedValue,
+  interpolate,
+  Extrapolation,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useGameState } from "@/store/useGameState";
 
-const GRAVITY = 9.8;
+const GRAVITY = 18;
+const JUMP = -5;
 
 const App = () => {
-  const { isStarted, startGame } = useGameState();
+  const { isStarted, startGame, endGame } = useGameState();
   const { width, height } = useWindowDimensions();
-
-  const bg = useImage(require("@/assets/sprites/background-day.png"));
-  const intro = useImage(require("@/assets/sprites/message.png"));
-  const bird = useImage(require("@/assets/sprites/yellowbird-upflap.png"));
-  const pipe = useImage(require("@/assets/sprites/pipe-green.png"));
-  const ground = useImage(require("@/assets/sprites/base.png"));
 
   const pipeWidth = 104;
   const pipeHeight = 640;
   const pipeOffset = height / 1.6;
   const pipeOpening = 250;
+  const birdWidth = 64;
+  const birdHeight = 48;
+
+  const bg = useImage(require("@/assets/sprites/background-day.png"));
+  const intro = useImage(require("@/assets/sprites/message.png"));
+  const birdUpFlap = useImage(
+    require("@/assets/sprites/yellowbird-upflap.png")
+  );
+  const birdMidFlap = useImage(
+    require("@/assets/sprites/yellowbird-midflap.png")
+  );
+  const birdDownFlap = useImage(
+    require("@/assets/sprites/yellowbird-downflap.png")
+  );
+  const bird = [birdUpFlap, birdMidFlap, birdDownFlap];
+  const pipe = useImage(require("@/assets/sprites/pipe-green.png"));
+  const ground = useImage(require("@/assets/sprites/base.png"));
 
   const x = useSharedValue(width);
 
   const groundX = useSharedValue(0);
+  const birdFrameIndex = useSharedValue(0);
   const birdY = useSharedValue(height / 2.4);
   const birdYVelocity = useSharedValue(0);
+  const birdTransform = useDerivedValue(() => {
+    return [
+      {
+        rotate: interpolate(
+          birdYVelocity.value,
+          [JUMP, -JUMP, 10, GRAVITY],
+          [-0.7, -0.4, 0.4, Math.PI / 2],
+          Extrapolation.CLAMP
+        ),
+      },
+    ];
+  });
+  const birdOrigin = useDerivedValue(() => ({
+    x: width / 4 + birdWidth / 2,
+    y: birdY.value + birdHeight / 2,
+  }));
 
   const touch = Gesture.Tap()
     .onStart(() => {
@@ -49,13 +81,16 @@ const App = () => {
         runOnJS(startGame)();
       }
     })
-    .onTouchesDown(() => {})
+    .onTouchesDown(() => {
+      birdYVelocity.value = JUMP;
+    })
     .onEnd(() => {});
 
   useFrameCallback(({ timeSincePreviousFrame: dt }) => {
     if (dt === null) return;
-    if (!isStarted) return;
 
+    if (!isStarted) return;
+    // birdYVelocity.value = 10;
     birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
     birdY.value = birdY.value + birdYVelocity.value;
   });
@@ -73,7 +108,7 @@ const App = () => {
   return (
     <SafeAreaView>
       <GestureDetector gesture={touch}>
-        <Canvas style={{ width, height, backgroundColor: "red" }}>
+        <Canvas style={{ width, height }}>
           {/* Background */}
           <Image image={bg} height={height} width={width} fit={"cover"} />
 
@@ -126,7 +161,15 @@ const App = () => {
           />
 
           {/* Bird */}
-          <Image image={bird} width={64} height={48} y={birdY} x={width / 4} />
+          <Group transform={birdTransform} origin={birdOrigin}>
+            <Image
+              image={birdUpFlap}
+              width={birdWidth}
+              height={birdHeight}
+              x={width / 4}
+              y={birdY}
+            />
+          </Group>
         </Canvas>
       </GestureDetector>
     </SafeAreaView>
