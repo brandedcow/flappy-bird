@@ -1,10 +1,12 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Canvas,
   Group,
   useImage,
   Image,
   scale,
+  Text,
+  useFont,
 } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +21,7 @@ import {
   useDerivedValue,
   interpolate,
   Extrapolation,
+  useAnimatedReaction,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useGameState } from "@/store/useGameState";
@@ -30,6 +33,7 @@ const App = () => {
   const { isStarted, startGame, endGame } = useGameState();
   const { width, height } = useWindowDimensions();
 
+  // Constants
   const pipeWidth = 104;
   const pipeHeight = 640;
   const pipeOffset = height / 1.6;
@@ -37,34 +41,31 @@ const App = () => {
   const birdWidth = 64;
   const birdHeight = 48;
 
+  // Asests
+  const font = useFont(require("@/assets/fonts/SpaceMono-Regular.ttf"), 32);
   const bg = useImage(require("@/assets/sprites/background-day.png"));
   const intro = useImage(require("@/assets/sprites/message.png"));
   const birdUpFlap = useImage(
     require("@/assets/sprites/yellowbird-upflap.png")
   );
-  const birdMidFlap = useImage(
-    require("@/assets/sprites/yellowbird-midflap.png")
-  );
-  const birdDownFlap = useImage(
-    require("@/assets/sprites/yellowbird-downflap.png")
-  );
-  const bird = [birdUpFlap, birdMidFlap, birdDownFlap];
   const pipe = useImage(require("@/assets/sprites/pipe-green.png"));
   const ground = useImage(require("@/assets/sprites/base.png"));
 
-  const x = useSharedValue(width);
+  // Dynamic Values
+  const score = useSharedValue(0);
+  const scoreText = useDerivedValue(() => score.value.toString());
 
   const groundX = useSharedValue(0);
-  const birdFrameIndex = useSharedValue(0);
+
   const birdY = useSharedValue(height / 2.4);
-  const birdYVelocity = useSharedValue(0);
+  const birdYVelocity = useSharedValue(6);
   const birdTransform = useDerivedValue(() => {
     return [
       {
         rotate: interpolate(
           birdYVelocity.value,
-          [JUMP, -JUMP, 10, GRAVITY],
-          [-0.7, -0.4, 0.4, Math.PI / 2],
+          [JUMP, -JUMP, 6, 8, GRAVITY],
+          [-0.7, -0.5, 0, 1, Math.PI / 2],
           Extrapolation.CLAMP
         ),
       },
@@ -75,6 +76,9 @@ const App = () => {
     y: birdY.value + birdHeight / 2,
   }));
 
+  const pipe1X = useSharedValue(width);
+
+  // Gesture
   const touch = Gesture.Tap()
     .onStart(() => {
       if (!isStarted) {
@@ -86,11 +90,11 @@ const App = () => {
     })
     .onEnd(() => {});
 
+  // Hooks
   useFrameCallback(({ timeSincePreviousFrame: dt }) => {
     if (dt === null) return;
 
     if (!isStarted) return;
-    // birdYVelocity.value = 10;
     birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
     birdY.value = birdY.value + birdYVelocity.value;
   });
@@ -105,12 +109,42 @@ const App = () => {
     );
   }, []);
 
+  // Animate Pipes
+  useEffect(() => {
+    if (isStarted) {
+      pipe1X.value = withRepeat(
+        withSequence(
+          withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear }),
+          withTiming(width, { duration: 0 })
+        ),
+        -1
+      );
+    }
+  }, [isStarted]);
+
+  useAnimatedReaction(
+    () => pipe1X.value,
+    (currentValue, previousValue) => {
+      if (
+        // currentValue !== previousValue &&
+        previousValue !== null &&
+        currentValue <= width / 4 &&
+        previousValue > width / 4
+      ) {
+        score.value += 1;
+      }
+    }
+  );
+
   return (
     <SafeAreaView>
       <GestureDetector gesture={touch}>
         <Canvas style={{ width, height }}>
           {/* Background */}
           <Image image={bg} height={height} width={width} fit={"cover"} />
+
+          {/* Score */}
+          <Text text={scoreText} font={font} x={width / 2} y={40} />
 
           {/* Intro */}
           {!isStarted && (
@@ -128,7 +162,7 @@ const App = () => {
               image={pipe}
               height={pipeHeight}
               width={pipeWidth}
-              x={x}
+              x={pipe1X}
               y={-height + pipeOffset}
               transform={[{ rotate: Math.PI }, { scaleX: -1 }]}
               origin={{ x: width / 2, y: 0 }}
@@ -138,7 +172,7 @@ const App = () => {
               image={pipe}
               height={pipeHeight}
               width={pipeWidth}
-              x={x}
+              x={pipe1X}
               y={height - pipeOffset + pipeOpening}
             />
           </Group>
