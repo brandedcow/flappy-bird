@@ -42,6 +42,7 @@ const App = () => {
   const font = useFont(require("@/assets/fonts/SpaceMono-Regular.ttf"), 32);
   const bg = useImage(require("@/assets/sprites/background-day.png"));
   const intro = useImage(require("@/assets/sprites/message.png"));
+  const outro = useImage(require("@/assets/sprites/gameover.png"));
   const birdUpFlap = useImage(
     require("@/assets/sprites/yellowbird-upflap.png")
   );
@@ -54,6 +55,7 @@ const App = () => {
     gameStarted.value ? 0 : height / 2
   );
   const gameOver = useSharedValue(false);
+  const outroHeight = useDerivedValue(() => (!gameOver.value ? 0 : height / 2));
 
   const score = useSharedValue(0);
   const scoreText = useDerivedValue(() => score.value.toString());
@@ -187,6 +189,14 @@ const App = () => {
             height={messageHeight}
             width={width}
             y={height * 0.12}
+          />
+
+          {/* Game Over */}
+          <Image
+            image={outro}
+            width={width * 0.8}
+            height={outroHeight}
+            x={width * 0.1}
           />
 
           {/* Pipes */}
