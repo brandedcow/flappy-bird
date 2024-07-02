@@ -95,7 +95,7 @@ const App = () => {
     );
   };
 
-  const pipeAnimation = withRepeat(
+  const animatePipes = withRepeat(
     withSequence(
       withTiming(width, { duration: 0 }),
       withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear })
@@ -104,38 +104,40 @@ const App = () => {
   );
 
   // On Mount
-  //  - animate ground
-  //  + animate bird bop
   useEffect(() => {
     animateGround();
+    // animateBirdBop();
   }, []);
 
   // Handle Taps
   const touch = Gesture.Tap()
     .onTouchesDown(() => {
+      // Start Game
       if (!gameStart.value) {
-        // Start Game
         gameStart.value = true;
         birdYVelocity.value = JUMP;
-      } else if (gameOver.value) {
+      }
+      // Reset Game
+      else if (gameOver.value) {
         gameStart.value = false;
         gameOver.value = false;
         birdY.value = height / 2.4;
         birdYVelocity.value = 6;
         runOnJS(animateGround)();
-      } else {
+      }
+      //In Game
+      else {
         birdYVelocity.value = JUMP;
       }
     })
     .onEnd(() => {});
 
   // Pipe 1 X Change
-  //  - Increment Score
   useAnimatedReaction(
     () => pipe1X.value,
     (currentValue, previousValue) => {
+      // Increment Score
       if (
-        // currentValue !== previousValue &&
         previousValue !== null &&
         currentValue <= width / 4 &&
         previousValue > width / 4
@@ -146,8 +148,6 @@ const App = () => {
   );
 
   // Bird Y Change
-  //  - Hit Ground
-  //  + Hit Pipe
   useAnimatedReaction(
     () => birdY.value,
     (currentValue, previousValue) => {
@@ -160,24 +160,27 @@ const App = () => {
   );
 
   // Game Start
-  //  - Animate Ground
   useAnimatedReaction(
     () => gameStart.value,
     (currentValue, previousValue) => {
       if (currentValue && !previousValue) {
-        runOnJS(animateGround)();
+        // runOnJS(animatePipes)()
       }
     }
   );
 
   // Game Over
-  //  - Stop Animations
   useAnimatedReaction(
     () => gameOver.value,
     (currentValue, previousValue) => {
+      // Stop Animations
       if (currentValue && !previousValue) {
         cancelAnimation(groundX);
         cancelAnimation(pipe1X);
+      }
+
+      if (!currentValue && previousValue) {
+        runOnJS(animateGround)();
       }
     }
   );
