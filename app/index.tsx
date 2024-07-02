@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   Canvas,
   Group,
@@ -15,15 +15,19 @@ import {
   withSequence,
   withRepeat,
   useFrameCallback,
+  runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { useGameState } from "@/store/useGameState";
 
 const GRAVITY = 9.8;
 
 const App = () => {
+  const { isStarted, startGame } = useGameState();
   const { width, height } = useWindowDimensions();
 
   const bg = useImage(require("@/assets/sprites/background-day.png"));
+  const intro = useImage(require("@/assets/sprites/message.png"));
   const bird = useImage(require("@/assets/sprites/yellowbird-upflap.png"));
   const pipe = useImage(require("@/assets/sprites/pipe-green.png"));
   const ground = useImage(require("@/assets/sprites/base.png"));
@@ -40,11 +44,18 @@ const App = () => {
   const birdYVelocity = useSharedValue(0);
 
   const touch = Gesture.Tap()
+    .onStart(() => {
+      if (!isStarted) {
+        runOnJS(startGame)();
+      }
+    })
     .onTouchesDown(() => {})
     .onEnd(() => {});
 
   useFrameCallback(({ timeSincePreviousFrame: dt }) => {
     if (dt === null) return;
+    if (!isStarted) return;
+
     birdYVelocity.value = birdYVelocity.value + (GRAVITY * dt) / 1000;
     birdY.value = birdY.value + birdYVelocity.value;
   });
@@ -65,6 +76,16 @@ const App = () => {
         <Canvas style={{ width, height, backgroundColor: "red" }}>
           {/* Background */}
           <Image image={bg} height={height} width={width} fit={"cover"} />
+
+          {/* Intro */}
+          {!isStarted && (
+            <Image
+              image={intro}
+              height={height * 0.5}
+              width={width}
+              y={height * 0.12}
+            />
+          )}
 
           {/* Pipes */}
           <Group>
