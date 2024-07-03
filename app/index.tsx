@@ -6,6 +6,7 @@ import {
   Image,
   Text,
   useFont,
+  Circle,
 } from "@shopify/react-native-skia";
 import { useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +27,19 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { getRandomInt } from "@/util/get";
 
+type Circle = {
+  cx: number;
+  cy: number;
+  r: number;
+};
+
+type Rect = {
+  rx: number;
+  ry: number;
+  rw: number;
+  rh: number;
+};
+
 const GRAVITY = 18;
 const JUMP = -5;
 
@@ -37,6 +51,8 @@ const App = () => {
   const pipeOpening = 250;
   const birdWidth = 64;
   const birdHeight = 48;
+  const birdRadius = 24;
+  const birdX = width / 4 + birdWidth / 2;
   const groundHeight = width / 3;
 
   // Assets
@@ -78,9 +94,10 @@ const App = () => {
     ];
   });
   const birdOrigin = useDerivedValue(() => ({
-    x: width / 4 + birdWidth / 2,
+    x: birdX,
     y: birdY.value + birdHeight / 2,
   }));
+  const birdYOrigin = useDerivedValue(() => birdY.value + birdHeight / 2);
 
   const pipeXOffset = useSharedValue(width);
   const pipeYOffset = useSharedValue(getRandomInt(150, height - 450));
@@ -94,6 +111,20 @@ const App = () => {
     x: pipeXOffset.value,
     y: pipe2Y.value,
   }));
+  const pipes = useDerivedValue(() => [
+    {
+      rx: pipeXOffset.value,
+      ry: pipe1Y.value - pipeHeight,
+      rh: pipeHeight,
+      rw: pipeWidth,
+    },
+    {
+      rx: pipeXOffset.value,
+      ry: pipe2Y.value,
+      rh: pipeHeight,
+      rw: pipeWidth,
+    },
+  ]);
 
   // Animations
   const animateGround = () => {
@@ -116,7 +147,7 @@ const App = () => {
     );
   };
 
-  // Gesture Worklets
+  // Worklets
   const startGame = () => {
     "worklet";
     gameStart.value = true;
@@ -131,6 +162,35 @@ const App = () => {
     birdY.value = height / 2.4;
     birdYVelocity.value = 6;
     runOnJS(animateGround)();
+    pipeXOffset.value = width;
+  };
+
+  // https://www.jeffreythompson.org/collision-detection/circle-rect.php
+  const isCircleCollidingWithRect = (circle: Circle, rect: Rect) => {
+    "worklet";
+    const { cx, cy, r } = circle;
+    const { rx, ry, rw, rh } = rect;
+
+    // temporary variables to set edges for testing
+    let testX = cx;
+    let testY = cy;
+
+    // which edge is closest?
+    if (cx < rx) testX = rx; // test left edge
+    else if (cx > rx + rw) testX = rx + rw; // right edge
+    if (cy < ry) testY = ry; // top edge
+    else if (cy > ry + rh) testY = ry + rh; // bottom edge
+
+    // get distance from closest edges
+    const distX = cx - testX;
+    const distY = cy - testY;
+    const distance = Math.sqrt(distX * distX + distY * distY);
+
+    // if the distance is less than the radius, collision!
+    if (distance <= r) {
+      return true;
+    }
+    return false;
   };
 
   // On Mount
@@ -142,9 +202,11 @@ const App = () => {
   // Handle Taps
   const touch = Gesture.Tap()
     .onTouchesDown(() => {
-      if (!gameStart.value) startGame();
-      else if (gameOver.value) resetGame();
-      else {
+      if (!gameStart.value) {
+        startGame();
+      } else if (gameOver.value) {
+        resetGame();
+      } else {
         birdYVelocity.value = JUMP;
       }
     })
@@ -168,11 +230,24 @@ const App = () => {
   useAnimatedReaction(
     () => birdY.value,
     (currentValue, previousValue) => {
-      // Hits the ground
+      // - Hits the ground
       if (currentValue > height - groundHeight) {
         gameOver.value = true;
       }
-      // Hits the Pipe
+      // - Hits the Pipe
+      const collision = pipes.value.some((rect) =>
+        isCircleCollidingWithRect(
+          {
+            cx: birdX,
+            cy: birdOrigin.value.y,
+            r: birdRadius,
+          },
+          rect
+        )
+      );
+      if (collision) {
+        gameOver.value = true;
+      }
     }
   );
 
@@ -198,7 +273,6 @@ const App = () => {
 
       if (!currentValue && previousValue) {
         runOnJS(animateGround)();
-        // pipePos.value = { x: width, y: height * Math.random() };
       }
     }
   );
@@ -279,6 +353,8 @@ const App = () => {
               x={width / 4}
               y={birdY}
             />
+            {/* Bird Hitbox */}
+            {/* <Circle cx={birdX} cy={birdYOrigin} r={birdRadius} color="yellow" /> */}
           </Group>
 
           {/* Game Over */}
