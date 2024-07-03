@@ -97,7 +97,6 @@ const App = () => {
     x: birdX,
     y: birdY.value + birdHeight / 2,
   }));
-  const birdYOrigin = useDerivedValue(() => birdY.value + birdHeight / 2);
 
   const pipeXOffset = useSharedValue(width);
   const pipeYOffset = useSharedValue(getRandomInt(150, height - 450));
@@ -159,6 +158,7 @@ const App = () => {
     "worklet";
     gameStart.value = false;
     gameOver.value = false;
+    score.value = 0;
     birdY.value = height / 2.4;
     birdYVelocity.value = 6;
     runOnJS(animateGround)();
@@ -217,6 +217,9 @@ const App = () => {
     () => pipeXOffset.value,
     (currPos, prevPos) => {
       // Increment Score
+      if (prevPos && currPos < birdX && prevPos >= birdX) {
+        score.value += 1;
+      }
 
       // Refresh YOffset
       if (currPos === -pipeWidth) {
