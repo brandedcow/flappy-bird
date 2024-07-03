@@ -24,6 +24,7 @@ import {
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { getRandomInt } from "@/util/get";
 
 const GRAVITY = 18;
 const JUMP = -5;
@@ -33,7 +34,6 @@ const App = () => {
   const { width, height } = useWindowDimensions();
   const pipeWidth = 104;
   const pipeHeight = 640;
-  const pipeOffset = height / 1.6;
   const pipeOpening = 250;
   const birdWidth = 64;
   const birdHeight = 48;
@@ -82,7 +82,18 @@ const App = () => {
     y: birdY.value + birdHeight / 2,
   }));
 
-  const pipe1X = useSharedValue(width);
+  const pipeXOffset = useSharedValue(width);
+  const pipeYOffset = useSharedValue(getRandomInt(150, height - 450));
+  const pipe1Y = useDerivedValue(() => pipeYOffset.value - pipeOpening / 2);
+  const pipe1Origin = useDerivedValue(() => ({
+    x: pipeXOffset.value,
+    y: pipe1Y.value,
+  }));
+  const pipe2Y = useDerivedValue(() => pipeYOffset.value + pipeOpening / 2);
+  const pipe2Origin = useDerivedValue(() => ({
+    x: pipeXOffset.value,
+    y: pipe2Y.value,
+  }));
 
   // Animations
   const animateGround = () => {
@@ -95,13 +106,32 @@ const App = () => {
     );
   };
 
-  const animatePipes = withRepeat(
-    withSequence(
-      withTiming(width, { duration: 0 }),
-      withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear })
-    ),
-    -1
-  );
+  const animatePipes = () => {
+    pipeXOffset.value = withRepeat(
+      withSequence(
+        withTiming(width, { duration: 0 }),
+        withTiming(-pipeWidth, { duration: 2000, easing: Easing.linear })
+      ),
+      -1
+    );
+  };
+
+  // Gesture Worklets
+  const startGame = () => {
+    "worklet";
+    gameStart.value = true;
+    birdYVelocity.value = JUMP;
+    runOnJS(animatePipes)();
+  };
+
+  const resetGame = () => {
+    "worklet";
+    gameStart.value = false;
+    gameOver.value = false;
+    birdY.value = height / 2.4;
+    birdYVelocity.value = 6;
+    runOnJS(animateGround)();
+  };
 
   // On Mount
   useEffect(() => {
@@ -112,20 +142,8 @@ const App = () => {
   // Handle Taps
   const touch = Gesture.Tap()
     .onTouchesDown(() => {
-      // Start Game
-      if (!gameStart.value) {
-        gameStart.value = true;
-        birdYVelocity.value = JUMP;
-      }
-      // Reset Game
-      else if (gameOver.value) {
-        gameStart.value = false;
-        gameOver.value = false;
-        birdY.value = height / 2.4;
-        birdYVelocity.value = 6;
-        runOnJS(animateGround)();
-      }
-      //In Game
+      if (!gameStart.value) startGame();
+      else if (gameOver.value) resetGame();
       else {
         birdYVelocity.value = JUMP;
       }
@@ -134,15 +152,14 @@ const App = () => {
 
   // Pipe 1 X Change
   useAnimatedReaction(
-    () => pipe1X.value,
-    (currentValue, previousValue) => {
+    () => pipeXOffset.value,
+    (currPos, prevPos) => {
       // Increment Score
-      if (
-        previousValue !== null &&
-        currentValue <= width / 4 &&
-        previousValue > width / 4
-      ) {
-        score.value += 1;
+
+      // Refresh YOffset
+      if (currPos === -pipeWidth) {
+        pipeYOffset.value =
+          Math.random() * (height * 0.65 - height * 0.25 + 1) + height * 0.25;
       }
     }
   );
@@ -164,7 +181,7 @@ const App = () => {
     () => gameStart.value,
     (currentValue, previousValue) => {
       if (currentValue && !previousValue) {
-        // runOnJS(animatePipes)()
+        runOnJS(animatePipes)();
       }
     }
   );
@@ -176,11 +193,12 @@ const App = () => {
       // Stop Animations
       if (currentValue && !previousValue) {
         cancelAnimation(groundX);
-        cancelAnimation(pipe1X);
+        cancelAnimation(pipeXOffset);
       }
 
       if (!currentValue && previousValue) {
         runOnJS(animateGround)();
+        // pipePos.value = { x: width, y: height * Math.random() };
       }
     }
   );
@@ -213,31 +231,25 @@ const App = () => {
             y={height * 0.12}
           />
 
-          {/* Game Over */}
-          <Image
-            image={outro}
-            width={width * 0.8}
-            height={outroHeight}
-            x={width * 0.1}
-          />
-
           {/* Pipes */}
           <Group>
             <Image
               image={pipe}
               height={pipeHeight}
               width={pipeWidth}
-              x={pipe1X}
-              y={-height + pipeOffset}
+              x={pipeXOffset}
+              y={pipe1Y}
+              origin={pipe1Origin}
               transform={[{ rotate: Math.PI }, { scaleX: -1 }]}
-              origin={{ x: width / 2, y: 0 }}
             />
+
             <Image
               image={pipe}
               height={pipeHeight}
               width={pipeWidth}
-              x={pipe1X}
-              y={height - pipeOffset + pipeOpening}
+              x={pipeXOffset}
+              y={pipe2Y}
+              origin={pipe2Origin}
             />
           </Group>
 
@@ -268,6 +280,14 @@ const App = () => {
               y={birdY}
             />
           </Group>
+
+          {/* Game Over */}
+          <Image
+            image={outro}
+            width={width * 0.8}
+            height={outroHeight}
+            x={width * 0.1}
+          />
         </Canvas>
       </GestureDetector>
     </SafeAreaView>
